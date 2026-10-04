@@ -1,0 +1,27 @@
+native_checkpoint_location: "s3://data-platform-state/checkpoints/native_spark_wal/"
+
+extractor:
+  class: "spark_framework.extractors.native_streaming_extractor.NativeStreamingExtractor"
+  path: "s3://bronze-zone/raw-events/"
+  # Notice there is NO custom checkpoint_strategy block here!
+
+transformer:
+  class: "spark_framework.transformers.sql_transformer.SQLTransformer"
+  columns:
+    id: "id"
+    amount: "amount"
+    updated_at: "current_timestamp()"
+
+data_quality:
+  class: "spark_framework.dq.sql_rule_dq.SQLRuleDQGate"
+  rules:
+    amount_positive: "amount >= 0"
+
+sink:
+  class: "spark_framework.sinks.iceberg_sink.IcebergSink"
+  table_name: "silver_zone.transactions"
+  mode: "append"
+
+dlq_sink:
+  class: "spark_framework.sinks.kafka_dlq_sink.KafkaDLQSink"
+  topic: "dlq-bad-transactions"

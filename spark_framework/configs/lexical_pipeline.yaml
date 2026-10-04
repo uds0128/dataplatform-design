@@ -1,0 +1,30 @@
+extractor:
+  class: "spark_framework.extractors.s3_extractor.S3Extractor"
+  path: "s3://bronze-zone/raw-events/"
+  checkpoint_strategy:
+    class: "spark_framework.strategies.lexical_checkpoint.LexicalCheckpointStrategy"
+    checkpoint_location: "s3://data-platform-state/checkpoints/pipeline_lexical/state.txt"
+
+transformer:
+  class: "spark_framework.transformers.sql_transformer.SQLTransformer"
+  columns:
+    id: "id"
+    full_name: "concat('Prefix_', name)"
+    amount: "amount"
+    updated_at: "current_timestamp()"
+
+data_quality:
+  class: "spark_framework.dq.sql_rule_dq.SQLRuleDQGate"
+  rules:
+    amount_positive: "amount >= 0"
+    name_not_null: "name IS NOT NULL"
+
+sink:
+  class: "spark_framework.sinks.iceberg_sink.IcebergSink"
+  table_name: "silver_zone.transactions"
+  mode: "append"
+  partition_columns: ["updated_at"]
+
+dlq_sink:
+  class: "spark_framework.sinks.kafka_dlq_sink.KafkaDLQSink"
+  topic: "dlq-bad-transactions"

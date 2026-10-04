@@ -1,0 +1,33 @@
+extractor:
+  class: "spark_framework.extractors.kafka_extractor.KafkaExtractor"
+  topic: "raw-transactions"
+  bootstrap_servers: "localhost:9092"
+  checkpoint_strategy:
+    class: "spark_framework.strategies.kafka_checkpoint.KafkaDuckDBCheckpointStrategy"
+    checkpoint_location: "s3://data-platform-state/checkpoints/pipeline_kafka/state.duckdb"
+
+transformer:
+  class: "spark_framework.transformers.sql_transformer.SQLTransformer"
+  columns:
+    id: "id"
+    full_name: "concat('Prefix_', name)"
+    amount: "amount"
+    updated_at: "current_timestamp()"
+
+data_quality:
+  class: "spark_framework.dq.sql_rule_dq.SQLRuleDQGate"
+  rules:
+    amount_positive: "amount >= 0"
+    name_not_null: "name IS NOT NULL"
+
+sink:
+  class: "spark_framework.sinks.iceberg_sink.IcebergSink"
+  table_name: "silver_zone.transactions"
+  mode: "upsert"
+  primary_key: ["id"]
+  sort_column: "updated_at"
+  partition_columns: ["updated_at"]
+
+dlq_sink:
+  class: "spark_framework.sinks.kafka_dlq_sink.KafkaDLQSink"
+  topic: "dlq-bad-transactions"

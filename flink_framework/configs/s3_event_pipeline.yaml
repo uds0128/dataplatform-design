@@ -1,0 +1,47 @@
+extractor:
+  class: "flink_framework.extractors.s3_extractor.S3Extractor"
+  path: "s3://bronze-zone/raw-events/"
+  format: "parquet"
+  schema:
+    id: "STRING"
+    name: "STRING"
+    amount: "DOUBLE"
+    updated_at: "TIMESTAMP(3)"
+  checkpoint_strategy:
+    class: "flink_framework.strategies.sqs_checkpoint.SQSDuckDBCheckpointStrategy"
+    sqs_url: "https://sqs.us-east-1.amazonaws.com/123/my-queue"
+    checkpoint_location: "s3://data-platform-state/checkpoints/flink_sqs/state.duckdb"
+
+transformer:
+  class: "flink_framework.transformers.sql_transformer.SQLTransformer"
+  columns:
+    id: "id"
+    full_name: "CONCAT('Prefix_', name)"
+    amount: "amount"
+    updated_at: "updated_at"
+
+data_quality:
+  class: "flink_framework.dq.sql_rule_dq.SQLRuleDQGate"
+  rules:
+    amount_positive: "amount >= 0"
+    name_not_null: "name IS NOT NULL"
+
+sink:
+  class: "flink_framework.sinks.iceberg_sink.IcebergSink"
+  table_name: "silver_zone.transactions"
+  primary_key: ["id"]
+  schema:
+    id: "STRING"
+    full_name: "STRING"
+    amount: "DOUBLE"
+    updated_at: "TIMESTAMP(3)"
+
+dlq_sink:
+  class: "flink_framework.sinks.kafka_dlq_sink.KafkaDLQSink"
+  topic: "dlq-bad-transactions"
+  bootstrap_servers: "localhost:9092"
+  schema:
+    id: "STRING"
+    full_name: "STRING"
+    amount: "DOUBLE"
+    updated_at: "TIMESTAMP(3)"
